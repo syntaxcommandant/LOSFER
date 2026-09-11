@@ -15,6 +15,26 @@ def find_match(lost_description, found_descriptions):
 
     return similarity_scores[0]
 
+def get_best_match(lost_description, found_descriptions, threshold=0.3):
+    
+   # Best match dhoondta hai aur batata hai match mila ya nahi
+    
+    scores = find_match(lost_description, found_descriptions)
+    best_index = scores.argmax()
+    best_score = scores[best_index]
+
+    if best_score >= threshold:
+        return {
+            "match_found": True,
+            "matched_item": found_descriptions[best_index],
+            "confidence": round(float(best_score), 2)
+        }
+    else:
+        return {
+            "match_found": False,
+            "matched_item": None,
+            "confidence": round(float(best_score), 2)
+        }
 
 # Test karne ke liye (dummy data)
 if __name__ == "__main__":
@@ -31,3 +51,12 @@ if __name__ == "__main__":
 
     for i, score in enumerate(scores):
         print(f"Found item {i+1}: '{found_items[i]}' -> Similarity: {score:.2f}")
+
+        print("\n--- Best Match Result ---")
+    result = get_best_match(lost_item, found_items)
+    print(result)
+
+        
+
+
+
