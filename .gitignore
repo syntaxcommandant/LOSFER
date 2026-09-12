@@ -1,1 +1,6 @@
 losfer-e7f20-firebase-adminsdk-fbsvc-28b735365d.json
+venv/
+backend/venv/
+__pycache__/
+*.pyc
+*.db
