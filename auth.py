@@ -1,15 +1,24 @@
+import os
+import json
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import firebase_admin
 from firebase_admin import credentials, auth
 
-# Connect to Firebase using our secret key
-cred = credentials.Certificate("losfer-e7f20-firebase-adminsdk-fbsvc-28b735365d.json")
+# Firebase credentials load karna — pehle environment variable check karo (Railway ke liye),
+# agar nahi mila to local JSON file use karo (apne computer ke liye)
+firebase_creds_json = os.environ.get("FIREBASE_CREDENTIALS")
+
+if firebase_creds_json:
+    cred_dict = json.loads(firebase_creds_json)
+    cred = credentials.Certificate(cred_dict)
+else:
+    cred = credentials.Certificate("losfer-e7f20-firebase-adminsdk-fbsvc-28b735365d.json")
+
 firebase_admin.initialize_app(cred)
 
 app = FastAPI()
 
-# Ye batata hai signup/login request mein kya-kya data aayega
 class SignupRequest(BaseModel):
     email: str
     password: str
