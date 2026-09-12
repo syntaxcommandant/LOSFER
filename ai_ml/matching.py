@@ -81,6 +81,28 @@ def get_best_match_with_category(lost_item, found_items, threshold=0.3):
 
     return result
 
+def item_to_dict(item):
+    """
+    SQLAlchemy Item object ko dictionary mein convert karta hai
+    (jo get_best_match_with_category function expect karta hai)
+    """
+    return {
+        "description": item.description,
+        "category": item.category
+    }
+
+
+def find_match_for_item(lost_item_obj, found_items_objs, threshold=0.3):
+    """
+    Backend se seedha Item objects lekar match dhoondta hai
+    lost_item_obj: ek Item object (jiska item_type = LOST)
+    found_items_objs: list of Item objects (jinka item_type = FOUND)
+    """
+    lost_item = item_to_dict(lost_item_obj)
+    found_items = [item_to_dict(item) for item in found_items_objs]
+
+    return get_best_match_with_category(lost_item, found_items, threshold)
+
 
 # Test karne ke liye (dummy data)
 if __name__ == "__main__":
