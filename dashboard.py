@@ -1,7 +1,7 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-app = FastAPI()
+router = APIRouter()
 
 # Temporary in-memory storage (baad mein database se replace hoga)
 claims_db = [
@@ -11,13 +11,13 @@ claims_db = [
 ]
 
 # GET endpoint - saare pending claims dikhane ke liye
-@app.get("/claims/pending")
+@router.get("/claims/pending")
 def get_pending_claims():
     pending = [claim for claim in claims_db if claim["status"] == "pending"]
     return {"pending_claims": pending}
 
 # POST endpoint - claim approve karne ke liye
-@app.post("/claims/{claim_id}/approve")
+@router.post("/claims/{claim_id}/approve")
 def approve_claim(claim_id: int):
     for claim in claims_db:
         if claim["id"] == claim_id:
@@ -26,7 +26,7 @@ def approve_claim(claim_id: int):
     raise HTTPException(status_code=404, detail="Claim not found")
 
 # POST endpoint - claim reject karne ke liye
-@app.post("/claims/{claim_id}/reject")
+@router.post("/claims/{claim_id}/reject")
 def reject_claim(claim_id: int):
     for claim in claims_db:
         if claim["id"] == claim_id:

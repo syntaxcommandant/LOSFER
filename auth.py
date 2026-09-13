@@ -4,6 +4,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import firebase_admin
 from firebase_admin import credentials, auth
+from dashboard import router as dashboard_router
 
 # Firebase credentials load karna — pehle environment variable check karo (Railway ke liye),
 # agar nahi mila to local JSON file use karo (apne computer ke liye)
@@ -18,6 +19,8 @@ else:
 firebase_admin.initialize_app(cred)
 
 app = FastAPI()
+
+app.include_router(dashboard_router)
 
 class SignupRequest(BaseModel):
     email: str
