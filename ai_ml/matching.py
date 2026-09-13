@@ -42,11 +42,32 @@ def get_best_match_with_category(lost_item, found_items, threshold=0.3):
 
     Pehle same category ke items filter karta hai, fir unhi ke andar match dhoondta hai
     """
+    # Edge case 1: description khaali ho
+    if not lost_item.get("description") or lost_item["description"].strip() == "":
+        return {
+            "match_found": False,
+            "matched_item": None,
+            "confidence": 0.0,
+            "reason": "Lost item description is empty"
+        }
+
+    # Edge case 2: found_items list hi khaali ho
+    if not found_items:
+        return {
+            "match_found": False,
+            "matched_item": None,
+            "confidence": 0.0,
+            "reason": "No found items available to compare"
+        }
+
+    # Same category ke items filter karo
     same_category_items = [
         item for item in found_items
-        if item["category"].lower() == lost_item["category"].lower()
+        if item.get("category", "").lower() == lost_item.get("category", "").lower()
+        and item.get("description", "").strip() != ""
     ]
 
+    # Edge case 3: same category mein koi item nahi mila
     if not same_category_items:
         return {
             "match_found": False,
@@ -59,6 +80,28 @@ def get_best_match_with_category(lost_item, found_items, threshold=0.3):
     result = get_best_match(lost_item["description"], descriptions, threshold)
 
     return result
+
+def item_to_dict(item):
+    """
+    SQLAlchemy Item object ko dictionary mein convert karta hai
+    (jo get_best_match_with_category function expect karta hai)
+    """
+    return {
+        "description": item.description,
+        "category": item.category
+    }
+
+
+def find_match_for_item(lost_item_obj, found_items_objs, threshold=0.3):
+    """
+    Backend se seedha Item objects lekar match dhoondta hai
+    lost_item_obj: ek Item object (jiska item_type = LOST)
+    found_items_objs: list of Item objects (jinka item_type = FOUND)
+    """
+    lost_item = item_to_dict(lost_item_obj)
+    found_items = [item_to_dict(item) for item in found_items_objs]
+
+    return get_best_match_with_category(lost_item, found_items, threshold)
 
 
 # Test karne ke liye (dummy data)
@@ -78,6 +121,18 @@ if __name__ == "__main__":
     print("--- Category-Based Match Result ---")
     result = get_best_match_with_category(lost_item, found_items)
     print(result)
+
+    print("\n--- Edge Case Test: Empty Description ---")
+    test1 = get_best_match_with_category({"description": "", "category": "accessories"}, found_items)
+    print(test1)
+
+    print("\n--- Edge Case Test: Empty Found Items List ---")
+    test2 = get_best_match_with_category(lost_item, [])
+    print(test2)
+
+    print("\n--- Edge Case Test: No Matching Category ---")
+    test3 = get_best_match_with_category({"description": "silver watch", "category": "electronics"}, found_items)
+    print(test3)
         
 
 
