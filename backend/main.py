@@ -35,10 +35,10 @@ def report_lost(
     user_id: int = Depends(get_current_user_id)
 ):
     """
-    Submits a lost item report with location and timestamp metadata[cite: 1].
+    Submits a lost item report with location and timestamp metadata.
     """
     item = models.Item(
-        **item_in.model_dump(exclude_unset=True),
+        **item_in.model_dump(exclude_unset=True, exclude={"timestamp"}),
         item_type=models.ItemTypeEnum.LOST,
         user_id=user_id,
         timestamp=item_in.timestamp or datetime.utcnow()
@@ -50,15 +50,15 @@ def report_lost(
 
 @app.post("/report-found", response_model=schemas.ItemResponse, status_code=status.HTTP_201_CREATED)
 def report_found(
-    item_in: schemas.ItemCreate,
+    item_in: schemas.ItemTest if False else schemas.ItemCreate,
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id)
 ):
     """
-    Submits a found item report[cite: 1].
+    Submits a found item report.
     """
     item = models.Item(
-        **item_in.model_dump(exclude_unset=True),
+        **item_in.model_dump(exclude_unset=True, exclude={"timestamp"}),
         item_type=models.ItemTypeEnum.FOUND,
         user_id=user_id,
         timestamp=item_in.timestamp or datetime.utcnow()
