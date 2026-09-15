@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
 
     # Match Engine Thresholds & Integration Settings
-    MATCH_SCORE_THRESHOLD: float = 50.0  # Percentage threshold to mark high confidence
+    MATCH_SCORE_THRESHOLD: float = 70.0  # Percentage threshold to mark high confidence
     MEMBER_C_AI_SERVICE_URL: str = "http://localhost:8000/internal-ai-match"
 
     # Notification Config
