@@ -64,7 +64,7 @@ export default function MatchResultsPage() {
   };
 
   const getSimilarityPercentage = (score: number) => {
-    return Math.round(score * 10);
+    return Math.min(100, Math.round(score * 10));
   };
 
   return (
