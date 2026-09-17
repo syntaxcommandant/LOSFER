@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import axios from "axios";
 
 const categories = [
@@ -29,15 +29,19 @@ const colors = [
 export default function ReportPage() {
   const [type, setType] = useState<"lost" | "found">("lost");
   const [photoName, setPhotoName] = useState("");
+  const [photo, setPhoto] = useState<File | null>(null);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [secretAnswer, setSecretAnswer] = useState("");
   const [category, setCategory] = useState("");
   const [color, setColor] = useState("");
   const [location, setLocation] = useState("");
   const [timestamp, setTimestamp] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = async () => {
     setMessage("");
@@ -49,6 +53,11 @@ export default function ReportPage() {
 
     if (!description.trim()) {
       setMessage("Please enter a description.");
+      return;
+    }
+
+    if (!secretAnswer.trim()) {
+      setMessage("Please enter a secret verification answer.");
       return;
     }
 
@@ -72,6 +81,11 @@ export default function ReportPage() {
       return;
     }
 
+    if (type === "found" && !photo) {
+      setMessage("Please upload a photo for a found item.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -80,15 +94,25 @@ export default function ReportPage() {
           ? "http://127.0.0.1:8000/report-lost"
           : "http://127.0.0.1:8000/report-found";
 
-      const response = await axios.post(endpoint, {
+      const itemData = {
         title: title.trim(),
         description: description.trim(),
+        secret_answer: secretAnswer.trim(),
         category,
         color,
         location: location.trim(),
         timestamp: new Date(timestamp).toISOString(),
-        image_url: null,
-      });
+      };
+
+      const formData = new FormData();
+
+      formData.append("item_in", JSON.stringify(itemData));
+
+      if (photo) {
+        formData.append("image", photo);
+      }
+
+      const response = await axios.post(endpoint, formData);
 
       setMessage(
         `${type === "lost" ? "Lost" : "Found"} report submitted successfully! Report ID: ${response.data.id}`,
@@ -96,15 +120,34 @@ export default function ReportPage() {
 
       setTitle("");
       setDescription("");
+      setSecretAnswer("");
       setCategory("");
       setColor("");
       setLocation("");
       setTimestamp("");
+      setPhoto(null);
       setPhotoName("");
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        const backendMessage =
-          error.response?.data?.detail || "Failed to submit the report.";
+        const detail = error.response?.data?.detail;
+
+        let backendMessage = "Failed to submit the report.";
+
+        if (Array.isArray(detail)) {
+          backendMessage = detail
+            .map((item) =>
+              typeof item === "object" && item !== null && "msg" in item
+                ? String(item.msg)
+                : String(item),
+            )
+            .join(", ");
+        } else if (typeof detail === "string") {
+          backendMessage = detail;
+        }
 
         setMessage(`Error: ${backendMessage}`);
       } else {
@@ -218,6 +261,25 @@ export default function ReportPage() {
                 />
               </div>
 
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-800">
+                  Secret verification answer
+                </label>
+
+                <input
+                  type="text"
+                  placeholder="Enter a detail only the real owner should know"
+                  value={secretAnswer}
+                  onChange={(event) => setSecretAnswer(event.target.value)}
+                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                />
+
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  This answer will be used later to help verify ownership.
+                  Avoid entering information that is publicly visible.
+                </p>
+              </div>
+
               <div className="grid gap-6 md:grid-cols-2">
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-slate-800">
@@ -290,6 +352,9 @@ export default function ReportPage() {
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-800">
                   Item photo
+                  {type === "found" && (
+                    <span className="ml-1 text-red-500">*</span>
+                  )}
                 </label>
 
                 <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center transition hover:border-teal-400 hover:bg-teal-50">
@@ -306,12 +371,15 @@ export default function ReportPage() {
                   </p>
 
                   <input
+                    ref={fileInputRef}
                     type="file"
                     accept="image/png,image/jpeg,image/jpg"
                     className="hidden"
                     onChange={(event) => {
-                      const file = event.target.files?.[0];
+                      const file = event.target.files?.[0] ?? null;
+                      setPhoto(file);
                       setPhotoName(file ? file.name : "");
+                      setMessage("");
                     }}
                   />
                 </label>
@@ -323,9 +391,8 @@ export default function ReportPage() {
                 </p>
 
                 <p className="mt-1 text-sm leading-6 text-teal-800">
-                  Only provide information that helps identify the item. LOSFER
-                  can use item details to identify possible matches before a
-                  claim is completed.
+                  Only provide information that helps identify the item. Your
+                  secret answer is used later during ownership verification.
                 </p>
               </div>
 
