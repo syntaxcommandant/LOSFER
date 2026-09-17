@@ -1,4 +1,5 @@
 from fastapi import UploadFile, File, Form
+from fastapi.staticfiles import StaticFiles
 import json
 from image_scan import check_image
 from fastapi import FastAPI, Depends, HTTPException, status, Query
@@ -17,6 +18,8 @@ import models, schemas, services
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="LoseFer Backend Engine - Member B", version="1.0.0")
+
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,
@@ -55,6 +58,7 @@ def report_lost(
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id)
 ):
+    # item save karo
     item_data = schemas.ItemCreate(**json.loads(item_in))
     image_path = None
     if image:
