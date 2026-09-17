@@ -29,7 +29,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Dummy User Dependency for multi-user context testing (Replaced by JWT middleware in Auth integration)
+
+# Dummy User Dependency for multi-user context testing
+# (Replaced by JWT middleware in Auth integration)
 def get_current_user_id() -> int:
     return 1
 
@@ -58,30 +60,38 @@ def report_lost(
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id)
 ):
-    # item save karo
     item_data = schemas.ItemCreate(**json.loads(item_in))
     image_path = None
+
     if image:
-        # image save karo
         image_path = f"uploads/{image.filename}"
+
         with open(image_path, "wb") as f:
             f.write(image.file.read())
 
-        # scan karo
         is_safe = check_image(image_path)
+
         if not is_safe:
-            raise HTTPException(status_code=400, detail="Image flagged as inappropriate content")
+            raise HTTPException(
+                status_code=400,
+                detail="Image flagged as inappropriate content"
+            )
 
     item = models.Item(
-        **item_data.model_dump(exclude_unset=True, exclude={"timestamp", "image_url"}),
+        **item_data.model_dump(
+            exclude_unset=True,
+            exclude={"timestamp", "image_url"}
+        ),
         item_type=models.ItemTypeEnum.LOST,
         user_id=user_id,
         timestamp=item_data.timestamp or datetime.now(timezone.utc),
         image_url=image_path
     )
+
     db.add(item)
     db.commit()
     db.refresh(item)
+
     return item
 
 
@@ -95,30 +105,41 @@ def report_found(
     """
     Submits a found item report.
     """
+
     item_data = schemas.ItemCreate(**json.loads(item_in))
 
-    # image save karo
     image_path = f"uploads/{image.filename}"
+
     with open(image_path, "wb") as f:
         f.write(image.file.read())
 
-    # scan karo
     is_safe = check_image(image_path)
+
     if not is_safe:
-        raise HTTPException(status_code=400, detail="Image flagged as inappropriate content")
+        raise HTTPException(
+            status_code=400,
+            detail="Image flagged as inappropriate content"
+        )
 
     item = models.Item(
-        **item_data.model_dump(exclude_unset=True, exclude={"timestamp", "image_url"}),
+        **item_data.model_dump(
+            exclude_unset=True,
+            exclude={"timestamp", "image_url"}
+        ),
         item_type=models.ItemTypeEnum.FOUND,
         user_id=user_id,
         timestamp=item_data.timestamp or datetime.now(timezone.utc),
         image_url=image_path
     )
+
     db.add(item)
     db.commit()
     db.refresh(item)
+
     return item
 
+
+# --- OWNERSHIP VERIFICATION ENDPOINT ---
 
 @app.post("/verify-item/{item_id}")
 def verify_item(
@@ -129,24 +150,43 @@ def verify_item(
     """
     Verifies claimant's secret answer against the stored one using keyword matching.
     """
-    item = db.query(models.Item).filter(models.Item.id == item_id).first()
+
+    item = db.query(models.Item).filter(
+        models.Item.id == item_id
+    ).first()
 
     if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Item not found"
+        )
 
     stored_answer = item.secret_answer.strip().lower()
     given_answer = submitted_answer.strip().lower()
 
-    # Common filler words jo ignore karne hain
-    ignore_words = {"the", "a", "an", "is", "are", "there", "it", "has", "on", "of", "in"}
+    ignore_words = {
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "there",
+        "it",
+        "has",
+        "on",
+        "of",
+        "in"
+    }
 
     stored_words = set(stored_answer.split()) - ignore_words
     given_words = set(given_answer.split()) - ignore_words
 
     if not stored_words:
-        return {"verified": False, "message": "No valid secret answer stored"}
+        return {
+            "verified": False,
+            "message": "No valid secret answer stored"
+        }
 
-    # Kitne % stored keywords submitted answer mein maujood hain
     match_count = len(stored_words & given_words)
     match_ratio = match_count / len(stored_words)
 
@@ -156,6 +196,7 @@ def verify_item(
             "message": "Verification successful",
             "match_score": round(match_ratio * 100, 1)
         }
+
     else:
         return {
             "verified": False,
@@ -163,6 +204,8 @@ def verify_item(
             "match_score": round(match_ratio * 100, 1)
         }
 
+
+# --- FOUND ITEMS ENDPOINT ---
 
 @app.get("/items", response_model=List[schemas.ItemResponse])
 def get_found_items(
@@ -172,6 +215,7 @@ def get_found_items(
     """
     Retrieves and lists all found items, with optional category filtering.
     """
+
     query = db.query(models.Item).filter(
         models.Item.item_type == models.ItemTypeEnum.FOUND
     )
@@ -195,14 +239,17 @@ def get_matches_for_item(
     Calculates and returns ranked candidate matches using Member C's scoring factors.
     Stores high-confidence match entities in database and triggers notifications.
     """
+
     target_item = db.query(models.Item).filter(
         models.Item.id == item_id
     ).first()
 
     if not target_item:
-        raise HTTPException(status_code=404, detail="Item not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Item not found"
+        )
 
-    # Determine opposite item pool
     opposite_type = (
         models.ItemTypeEnum.FOUND
         if target_item.item_type == models.ItemTypeEnum.LOST
@@ -216,6 +263,7 @@ def get_matches_for_item(
     ranked_results = []
 
     for candidate in candidates:
+
         score = services.calculate_heuristic_match(
             target_item,
             candidate
@@ -223,7 +271,6 @@ def get_matches_for_item(
 
         is_high_confidence = score >= settings.MATCH_SCORE_THRESHOLD
 
-        # Record or update match record
         match_entry = db.query(models.Match).filter(
             models.Match.lost_item_id == (
                 target_item.id
@@ -238,6 +285,7 @@ def get_matches_for_item(
         ).first()
 
         if not match_entry:
+
             match_entry = models.Match(
                 lost_item_id=(
                     target_item.id
@@ -256,8 +304,8 @@ def get_matches_for_item(
             db.commit()
             db.refresh(match_entry)
 
-        # Trigger notification if criteria met
         if is_high_confidence and not match_entry.is_notification_sent:
+
             notified = services.trigger_match_notification(
                 lost_item=(
                     target_item
@@ -283,7 +331,6 @@ def get_matches_for_item(
             "high_confidence_match": is_high_confidence
         })
 
-    # Sort results highest score first
     ranked_results.sort(
         key=lambda x: x["similarity_score"],
         reverse=True
@@ -294,7 +341,11 @@ def get_matches_for_item(
 
 # --- CLAIM ENDPOINTS ---
 
-@app.post("/claim", response_model=schemas.ClaimResponse, status_code=status.HTTP_201_CREATED)
+@app.post(
+    "/claim",
+    response_model=schemas.ClaimResponse,
+    status_code=status.HTTP_201_CREATED
+)
 def submit_claim(
     claim_in: schemas.ClaimCreate,
     db: Session = Depends(get_db),
@@ -303,6 +354,7 @@ def submit_claim(
     """
     Submits a claim and stores verification answers for security verification.
     """
+
     item = db.query(models.Item).filter(
         models.Item.id == claim_in.item_id
     ).first()
@@ -327,6 +379,93 @@ def submit_claim(
     )
 
     db.add(claim)
+    db.commit()
+    db.refresh(claim)
+
+    return claim
+
+
+# ==========================================================
+# --- STAFF DASHBOARD ENDPOINTS ---
+# ==========================================================
+
+@app.get(
+    "/staff/claims",
+    response_model=List[schemas.ClaimResponse]
+)
+def get_pending_claims(
+    db: Session = Depends(get_db)
+):
+    """
+    Retrieves all claims that are currently pending staff review.
+    """
+
+    claims = (
+        db.query(models.Claim)
+        .filter(
+            models.Claim.status == models.ClaimStatusEnum.PENDING
+        )
+        .order_by(models.Claim.id.desc())
+        .all()
+    )
+
+    return claims
+
+
+@app.patch(
+    "/staff/claims/{claim_id}/approve",
+    response_model=schemas.ClaimResponse
+)
+def approve_claim(
+    claim_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Approves a pending claim.
+    """
+
+    claim = db.query(models.Claim).filter(
+        models.Claim.id == claim_id
+    ).first()
+
+    if not claim:
+        raise HTTPException(
+            status_code=404,
+            detail="Claim not found"
+        )
+
+    claim.status = models.ClaimStatusEnum.APPROVED
+
+    db.commit()
+    db.refresh(claim)
+
+    return claim
+
+
+@app.patch(
+    "/staff/claims/{claim_id}/reject",
+    response_model=schemas.ClaimResponse
+)
+def reject_claim(
+    claim_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Rejects a pending claim.
+    """
+
+    claim = db.query(models.Claim).filter(
+        models.Claim.id == claim_id
+    ).first()
+
+    if not claim:
+        raise HTTPException(
+            status_code=404,
+            detail="Claim not found"
+        )
+
+    claim.status = models.ClaimStatusEnum.REJECTED
+
     db.commit()
     db.refresh(claim)
 
