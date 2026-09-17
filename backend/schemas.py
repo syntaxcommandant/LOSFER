@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from typing import Optional, List
@@ -6,6 +7,7 @@ from models import ItemTypeEnum, ClaimStatusEnum
 class ItemCreate(BaseModel):
     title: str
     description: str
+    secret_answer: str
     category: str
     color: str
     location: str

@@ -35,20 +35,22 @@ def get_current_user_id() -> int:
 @app.post("/report-lost", response_model=schemas.ItemResponse, status_code=status.HTTP_201_CREATED)
 def report_lost(
     item_in: str = Form(...),
-    image: UploadFile = File(...),
+    image: UploadFile = File(None),
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id)
 ):
     item_data = schemas.ItemCreate(**json.loads(item_in))
-    # image save karo
-    image_path = f"uploads/{image.filename}"
-    with open(image_path, "wb") as f:
-        f.write(image.file.read())
+    image_path = None
+    if image:
+        # image save karo
+        image_path = f"uploads/{image.filename}"
+        with open(image_path, "wb") as f:
+            f.write(image.file.read())
 
-    # scan karo
-    is_safe = check_image(image_path)
-    if not is_safe:
-        raise HTTPException(status_code=400, detail="Image flagged as inappropriate content")
+        # scan karo
+        is_safe = check_image(image_path)
+        if not is_safe:
+            raise HTTPException(status_code=400, detail="Image flagged as inappropriate content")
 
     item = models.Item(
         **item_data.model_dump(exclude_unset=True, exclude={"timestamp", "image_url"}),
@@ -61,6 +63,7 @@ def report_lost(
     db.commit()
     db.refresh(item)
     return item
+
 
 @app.post("/report-found", response_model=schemas.ItemResponse, status_code=status.HTTP_201_CREATED)
 def report_found(
@@ -95,6 +98,47 @@ def report_found(
     db.commit()
     db.refresh(item)
     return item
+
+@app.post("/verify-item/{item_id}")
+def verify_item(
+    item_id: int,
+    submitted_answer: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Verifies claimant's secret answer against the stored one using keyword matching.
+    """
+    item = db.query(models.Item).filter(models.Item.id == item_id).first()
+
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    stored_answer = item.secret_answer.strip().lower()
+    given_answer = submitted_answer.strip().lower()
+
+    # Common filler words jo ignore karne hain
+    ignore_words = {"the", "a", "an", "is", "are", "there", "it", "has", "on", "of", "in"}
+
+    stored_words = set(stored_answer.split()) - ignore_words
+    given_words = set(given_answer.split()) - ignore_words
+
+    if not stored_words:
+        return {"verified": False, "message": "No valid secret answer stored"}
+
+    # Kitne % stored keywords submitted answer mein maujood hain
+    match_count = len(stored_words & given_words)
+    match_ratio = match_count / len(stored_words)
+
+    if match_ratio >= 0.6:  # 60% ya usse zyada keywords match hone chahiye
+        return {"verified": True, "message": "Verification successful", "match_score": round(match_ratio * 100, 1)}
+    else:
+        return {
+            "verified": False,
+            "message": "Answer does not sufficiently match. Manual verification required.",
+            "match_score": round(match_ratio * 100, 1)
+        }
+    
+    
 
 @app.get("/items", response_model=List[schemas.ItemResponse])
 def get_found_items(

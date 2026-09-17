@@ -33,6 +33,7 @@ class Item(Base):
     item_type = Column(Enum(ItemTypeEnum), nullable=False)
     title = Column(String, nullable=False)
     description = Column(Text, nullable=False)
+    secret_answer = Column(String, nullable=False)  # For verification during claims
     category = Column(String, index=True, nullable=False)
     color = Column(String, index=True, nullable=False)
     location = Column(String, nullable=False)
