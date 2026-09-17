@@ -1,13 +1,17 @@
+from fastapi import UploadFile, File, Form
+import json
+from image_scan import check_image
 from fastapi import FastAPI, Depends, HTTPException, status, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from config import settings
 from database import engine, get_db
 from models import Base
 import models, schemas, services
+
 
 # Initialize database schema migrations
 Base.metadata.create_all(bind=engine)
@@ -30,18 +34,28 @@ def get_current_user_id() -> int:
 
 @app.post("/report-lost", response_model=schemas.ItemResponse, status_code=status.HTTP_201_CREATED)
 def report_lost(
-    item_in: schemas.ItemCreate,
+    item_in: str = Form(...),
+    image: UploadFile = File(...),
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id)
 ):
-    """
-    Submits a lost item report with location and timestamp metadata.
-    """
+    item_data = schemas.ItemCreate(**json.loads(item_in))
+    # image save karo
+    image_path = f"uploads/{image.filename}"
+    with open(image_path, "wb") as f:
+        f.write(image.file.read())
+
+    # scan karo
+    is_safe = check_image(image_path)
+    if not is_safe:
+        raise HTTPException(status_code=400, detail="Image flagged as inappropriate content")
+
     item = models.Item(
-        **item_in.model_dump(exclude_unset=True, exclude={"timestamp"}),
+        **item_data.model_dump(exclude_unset=True, exclude={"timestamp", "image_url"}),
         item_type=models.ItemTypeEnum.LOST,
         user_id=user_id,
-        timestamp=item_in.timestamp or datetime.utcnow()
+        timestamp=item_data.timestamp or datetime.now(timezone.utc),
+        image_url=image_path
     )
     db.add(item)
     db.commit()
@@ -50,19 +64,33 @@ def report_lost(
 
 @app.post("/report-found", response_model=schemas.ItemResponse, status_code=status.HTTP_201_CREATED)
 def report_found(
-    item_in: schemas.ItemTest if False else schemas.ItemCreate,
+    item_in: str = Form(...),
+    image: UploadFile = File(...),
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id)
 ):
     """
     Submits a found item report.
     """
+    item_data = schemas.ItemCreate(**json.loads(item_in))
+
+     # image save karo
+    image_path = f"uploads/{image.filename}"
+    with open(image_path, "wb") as f:
+        f.write(image.file.read())
+
+    # scan karo
+    is_safe = check_image(image_path)
+    if not is_safe:
+        raise HTTPException(status_code=400, detail="Image flagged as inappropriate content")
+    
     item = models.Item(
-        **item_in.model_dump(exclude_unset=True, exclude={"timestamp"}),
-        item_type=models.ItemTypeEnum.FOUND,
-        user_id=user_id,
-        timestamp=item_in.timestamp or datetime.utcnow()
-    )
+    **item_data.model_dump(exclude_unset=True, exclude={"timestamp", "image_url"}),
+    item_type=models.ItemTypeEnum.FOUND,
+    user_id=user_id,
+    timestamp=item_data.timestamp or datetime.now(timezone.utc),
+    image_url=image_path
+)
     db.add(item)
     db.commit()
     db.refresh(item)
